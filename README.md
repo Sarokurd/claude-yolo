@@ -9,6 +9,49 @@ Run parallel Claude Code agents in tmux with automatic permission approval.
 
 When organization-managed settings force `ask` mode for tools like `Bash`, `Bash(rm:*)`, and `WebFetch`, this tool auto-approves those prompts at the terminal level using `tmux capture-pane` + `send-keys`.
 
+## Table of contents
+
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Navigation](#navigation)
+- [Options](#options)
+- [How it works](#how-it-works)
+  - [Detection signals](#detection-signals)
+- [File structure](#file-structure)
+- [Prerequisites](#prerequisites)
+- [Testing](#testing)
+- [Development history](#development-history)
+
+## Installation
+
+**One-liner** (macOS, Linux, WSL):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/claude-yolo/claude-yolo/refs/heads/main/install.sh | bash
+```
+
+This clones to `~/.claude-yolo` and symlinks the binary into `~/.local/bin`. It also installs `tmux` and `claude` (Claude Code CLI) if they are missing. Override the install location with `CLAUDE_YOLO_HOME`:
+
+```bash
+CLAUDE_YOLO_HOME=~/my/path curl -fsSL https://raw.githubusercontent.com/claude-yolo/claude-yolo/refs/heads/main/install.sh | bash
+```
+
+**Manual install:**
+
+```bash
+git clone https://github.com/claude-yolo/claude-yolo.git ~/.claude-yolo
+ln -s ~/.claude-yolo/claude-yolo ~/.local/bin/claude-yolo
+```
+
+Then run from any project directory:
+
+```bash
+cd /path/to/your/project
+claude-yolo "fix the tests" "update docs"
+```
+
+The tool runs agents in whatever directory you invoke it from (or the `--dir` path if specified).
+
 ## Quick start
 
 ```bash
@@ -88,36 +131,6 @@ lib/
   approver-daemon.sh     # tmux capture-pane monitor + auto-approver
 test_approver.sh         # Test suite (131 tests)
 ```
-
-## Installation
-
-**One-liner** (macOS, Linux, WSL):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/claude-yolo/claude-yolo/refs/heads/main/install.sh | bash
-```
-
-This clones to `~/.claude-yolo` and symlinks the binary into `~/.local/bin`. It also installs `tmux` and `claude` (Claude Code CLI) if they are missing. Override the install location with `CLAUDE_YOLO_HOME`:
-
-```bash
-CLAUDE_YOLO_HOME=~/my/path curl -fsSL https://raw.githubusercontent.com/claude-yolo/claude-yolo/refs/heads/main/install.sh | bash
-```
-
-**Manual install:**
-
-```bash
-git clone https://github.com/claude-yolo/claude-yolo.git ~/.claude-yolo
-ln -s ~/.claude-yolo/claude-yolo ~/.local/bin/claude-yolo
-```
-
-Then run from any project directory:
-
-```bash
-cd /path/to/your/project
-claude-yolo "fix the tests" "update docs"
-```
-
-The tool runs agents in whatever directory you invoke it from (or the `--dir` path if specified).
 
 ## Prerequisites
 

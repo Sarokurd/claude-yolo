@@ -91,14 +91,28 @@ test_approver.sh         # Test suite (131 tests)
 
 ## Installation
 
+**One-liner** (macOS, Linux, WSL):
+
 ```bash
-# Clone the repository
-git clone <repo-url> ~/git/claude-yolo
+curl -fsSL https://raw.githubusercontent.com/claude-yolo/claude-yolo/refs/heads/main/install.sh | bash
+```
 
-# Make it available system-wide
-sudo ln -s ~/git/claude-yolo/claude-yolo /usr/local/bin/claude-yolo
+This clones to `~/.claude-yolo` and symlinks the binary into `~/.local/bin`. It also installs `tmux` and `claude` (Claude Code CLI) if they are missing. Override the install location with `CLAUDE_YOLO_HOME`:
 
-# Now run from any project directory
+```bash
+CLAUDE_YOLO_HOME=~/my/path curl -fsSL https://raw.githubusercontent.com/claude-yolo/claude-yolo/refs/heads/main/install.sh | bash
+```
+
+**Manual install:**
+
+```bash
+git clone https://github.com/claude-yolo/claude-yolo.git ~/.claude-yolo
+ln -s ~/.claude-yolo/claude-yolo ~/.local/bin/claude-yolo
+```
+
+Then run from any project directory:
+
+```bash
 cd /path/to/your/project
 claude-yolo "fix the tests" "update docs"
 ```

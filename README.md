@@ -56,13 +56,13 @@ The tool runs agents in whatever directory you invoke it from (or the `--dir` pa
 
 ```bash
 # Run three agents in parallel
-./claude-yolo "fix the login bug" "add unit tests for auth" "update the README"
+claude-yolo "fix the login bug" "add unit tests for auth" "update the README"
 
 # Use a specific model
-./claude-yolo --model opus "refactor the API layer"
+claude-yolo --model opus "refactor the API layer"
 
 # Point agents at a different project
-./claude-yolo --dir /path/to/project "run the test suite and fix failures"
+claude-yolo --dir /path/to/project "run the test suite and fix failures"
 ```
 
 Once launched, you're inside a tmux session with one window per agent. The last window (`control`) tails the audit log in real time.
@@ -71,12 +71,11 @@ Once launched, you're inside a tmux session with one window per agent. The last 
 
 | Key | Action |
 |---|---|
-| `Ctrl-b n` | Next agent window |
-| `Ctrl-b p` | Previous agent window |
-| `Ctrl-b 0..9` | Jump to window by number |
+| `Ctrl-b w` | List all agent windows and select one |
+| `Ctrl-b s` | Switch between tmux windows |
 | `Ctrl-b d` | Detach (agents keep running) |
 
-Re-attach later with `./claude-yolo --resume` or `tmux attach -t yolo-*`.
+Re-attach later with `claude-yolo --resume` or `tmux attach -t yolo-*`.
 
 ## Options
 

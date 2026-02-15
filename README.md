@@ -1,5 +1,5 @@
 > [!CAUTION]
-> **DO NOT use this tool on corporate hardware or connected to a corporate network.**
+> **DO NOT USE THIS TOOL ON CORPORATE HARDWARE OR CONNECTED TO A CORPORATE NETWORK.**
 >
 > This tool auto-approves all Claude Code permission prompts without human review, including destructive commands. For maximum isolation, run it on a **dedicated bare-metal server** with no personal data, no saved credentials, and no access to sensitive networks. You accept full responsibility for any consequences.
 

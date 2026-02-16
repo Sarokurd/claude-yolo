@@ -21,6 +21,7 @@ When organization-managed settings force `ask` mode for tools like `Bash`, `Bash
 - [File structure](#file-structure)
 - [Prerequisites](#prerequisites)
 - [Testing](#testing)
+- [Key features](#key-features)
 - [Development history](#development-history)
 
 ## Installation
@@ -157,6 +158,13 @@ The test suite covers:
 - False positive resistance (code output, markdown, missing signals)
 - Cooldown logic, command construction, audit logging
 - End-to-end integration tests using real tmux sessions
+
+## Key features
+
+- **Parallel multi-agent execution** — Uniquely enables parallel execution of multiple Claude Code agents in tmux with non-invasive, terminal-level auto-approval of permissions.
+- **Sophisticated detection logic** — Handles both expanded and collapsed transcript views without modifying the Claude CLI or relying on the `--dangerously-skip-permissions` flag.
+- **Reliability and traceability** — Per-pane cooldowns, detailed audit logging, and an extensive test suite emphasize reliability and traceability.
+- **No CLI patching or containerization** — Unlike most alternatives, avoids direct CLI patching or containerization, making it suitable for environments where `ask` mode is enforced.
 
 ## Development history
 

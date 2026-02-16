@@ -74,7 +74,10 @@ Once launched, you're inside a tmux session with one window per agent. The last 
 | Key | Action |
 |---|---|
 | `Ctrl-b w` | List all agent windows and select one |
-| `Ctrl-b s` | Switch between tmux windows |
+| `Ctrl-b s` | Switch between agent windows |
+| `Ctrl-b n` | Next pane |
+| `Ctrl-b p` | Previous pane |
+| `Ctrl-b x` | Stop the current agent, close pane |
 | `Ctrl-b d` | Detach (agents keep running) |
 
 Re-attach later with `claude-yolo --resume` or `tmux attach -t yolo-*`.

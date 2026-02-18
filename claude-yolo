@@ -10,21 +10,24 @@ AUDIT_LOG=""
 
 usage() {
     cat <<'EOF'
-Usage: claude-yolo [options] "task one" "task two" ...
+Usage: claude-yolo [options] ["task one" "task two" ...]
 
 Launch parallel Claude Code agents in tmux with auto-approval.
 
 Options:
-  --session NAME    Custom tmux session name (default: yolo-<timestamp>)
-  --dir PATH        Working directory for agents (default: current directory)
-  --model MODEL     Claude model to use (e.g., opus, sonnet, haiku)
-  --poll SECONDS    Approver poll interval (default: 0.3)
-  --resume          Re-attach to an existing yolo session
-  -h, --help        Show this help
+  -s, --session NAME    Custom tmux session name (default: yolo-<timestamp>)
+  -d, --dir PATH        Working directory for agents (default: current directory)
+  -m, --model MODEL     Claude model to use (e.g., opus, sonnet, haiku)
+  -p, --poll SECONDS    Approver poll interval (default: 0.3)
+  -f, --file FILE       Read a multiline prompt from a text file
+  -r, --resume          Re-attach to an existing yolo session
+  -h, --help            Show this help
 
 Examples:
+  claude-yolo                     # interactive claude with auto-approval
   claude-yolo "fix the login bug" "add unit tests for auth"
   claude-yolo --model opus --dir /my/project "refactor the API layer"
+  claude-yolo --file prompt.txt
   claude-yolo --resume
 EOF
 }
@@ -41,19 +44,20 @@ tmux_attach() {
 }
 
 main() {
-    local session_name="" work_dir="" model="" poll_interval="0.3" resume=0
+    local session_name="" work_dir="" model="" poll_interval="0.3" resume=0 prompt_file=""
     local tasks=()
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --session)  session_name="$2"; shift 2 ;;
-            --dir)      work_dir="$2"; shift 2 ;;
-            --model)    model="$2"; shift 2 ;;
-            --poll)     poll_interval="$2"; shift 2 ;;
-            --resume)   resume=1; shift ;;
-            -h|--help)  usage; exit 0 ;;
-            -*)         log_error "Unknown option: $1"; usage; exit 1 ;;
+            -s|--session)  session_name="$2"; shift 2 ;;
+            -d|--dir)      work_dir="$2"; shift 2 ;;
+            -m|--model)    model="$2"; shift 2 ;;
+            -p|--poll)     poll_interval="$2"; shift 2 ;;
+            -f|--file)     prompt_file="$2"; shift 2 ;;
+            -r|--resume)   resume=1; shift ;;
+            -h|--help)     usage; exit 0 ;;
+            -*)            log_error "Unknown option: $1"; usage; exit 1 ;;
             *)          tasks+=("$1"); shift ;;
         esac
     done
@@ -73,11 +77,24 @@ main() {
         exec tmux_attach "$existing"
     fi
 
-    # Require at least one task
+    # Read prompt from file if --file was given
+    if [[ -n "$prompt_file" ]]; then
+        if [[ ! -f "$prompt_file" ]]; then
+            log_error "File not found: $prompt_file"
+            exit 1
+        fi
+        local file_content
+        file_content="$(cat "$prompt_file")"
+        if [[ -z "$file_content" ]]; then
+            log_error "File is empty: $prompt_file"
+            exit 1
+        fi
+        tasks+=("$file_content")
+    fi
+
+    # No tasks = launch a single interactive claude session
     if [[ ${#tasks[@]} -eq 0 ]]; then
-        log_error "No tasks provided"
-        usage
-        exit 1
+        tasks+=("")
     fi
 
     # Set defaults
@@ -112,7 +129,7 @@ main() {
     tmux new-session -d -s "$SESSION_NAME" -n "agent-1" -c "$work_dir"
     tmux send-keys -t "$SESSION_NAME:agent-1" "$cmd" C-m
 
-    log_info "Started agent-1: ${first_task:0:60}..."
+    log_info "Started agent-1: ${first_task:+${first_task:0:60}...}${first_task:-interactive}"
 
     # Create additional agent windows
     local i
@@ -124,7 +141,7 @@ main() {
         tmux new-window -t "$SESSION_NAME" -n "$win_name" -c "$work_dir"
         tmux send-keys -t "$SESSION_NAME:$win_name" "$cmd" C-m
 
-        log_info "Started $win_name: ${task:0:60}..."
+        log_info "Started $win_name: ${task:+${task:0:60}...}${task:-interactive}"
     done
 
     # Start approver daemon in background (fully detached from this process).
@@ -154,6 +171,22 @@ build_agent_cmd() {
 
     if [[ -n "$model" ]]; then
         cmd="$cmd --model $model"
+    fi
+
+    # No task = interactive mode
+    if [[ -z "$task" ]]; then
+        echo "$cmd"
+        return
+    fi
+
+    # For multiline prompts, write to a temp file and pipe into claude.
+    # This avoids shell quoting issues with tmux send-keys.
+    if [[ "$task" == *$'\n'* ]]; then
+        local tmpfile
+        tmpfile="/tmp/claude-yolo-prompt-$RANDOM$RANDOM.txt"
+        printf '%s' "$task" > "$tmpfile"
+        echo "cat '$tmpfile' | $cmd"
+        return
     fi
 
     # Escape single quotes in the task for shell safety

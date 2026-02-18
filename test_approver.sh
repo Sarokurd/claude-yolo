@@ -1208,6 +1208,16 @@ assert_ok "launcher: --help exits successfully" \
 assert_ok "launcher: -h exits successfully" \
     bash "$SCRIPT_DIR/claude-yolo" -h
 
+# Short flags that mirror long flags
+assert_ok "launcher: -s is alias for --session (help still works)" \
+    bash "$SCRIPT_DIR/claude-yolo" -h
+
+assert_fail "launcher: -d nonexistent path fails" \
+    bash "$SCRIPT_DIR/claude-yolo" -d /nonexistent/path/xyz "task"
+
+assert_fail "launcher: -f nonexistent file fails" \
+    bash "$SCRIPT_DIR/claude-yolo" -f /nonexistent/file.txt
+
 # No args exits non-zero
 assert_fail "launcher: no arguments fails" \
     bash "$SCRIPT_DIR/claude-yolo"
@@ -1220,6 +1230,13 @@ assert_fail "launcher: unknown --flag fails" \
 # prereq check to pass but dir validation to fail)
 assert_fail "launcher: --dir nonexistent path fails" \
     bash "$SCRIPT_DIR/claude-yolo" --dir /nonexistent/path/xyz "task"
+
+# Short flags match long flags for --dir and --file
+assert_fail "launcher: -d matches --dir behavior" \
+    bash "$SCRIPT_DIR/claude-yolo" -d /nonexistent/path/xyz "task"
+
+assert_fail "launcher: -f matches --file behavior" \
+    bash "$SCRIPT_DIR/claude-yolo" -f /nonexistent/file.txt
 
 ###############################################################################
 #                  INTEGRATION: DAEMON + TMUX                                 #

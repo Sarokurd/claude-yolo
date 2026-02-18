@@ -52,7 +52,7 @@ cd /path/to/your/project
 claude-yolo "fix the tests" "update docs"
 ```
 
-The tool runs agents in whatever directory you invoke it from (or the `--dir` path if specified).
+The tool runs agents in whatever directory you invoke it from (or the `-d`/`--dir` path if specified).
 
 ## Quick start
 
@@ -61,10 +61,10 @@ The tool runs agents in whatever directory you invoke it from (or the `--dir` pa
 claude-yolo "fix the login bug" "add unit tests for auth" "update the README"
 
 # Use a specific model
-claude-yolo --model opus "refactor the API layer"
+claude-yolo -m opus "refactor the API layer"
 
 # Point agents at a different project
-claude-yolo --dir /path/to/project "run the test suite and fix failures"
+claude-yolo -d /path/to/project "run the test suite and fix failures"
 ```
 
 Once launched, you're inside a tmux session with one window per agent. The last window (`control`) tails the audit log in real time.
@@ -80,17 +80,18 @@ Once launched, you're inside a tmux session with one window per agent. The last 
 | `Ctrl-b x` | Stop the current agent, close pane |
 | `Ctrl-b d` | Detach (agents keep running) |
 
-Re-attach later with `claude-yolo --resume` or `tmux attach -t yolo-*`.
+Re-attach later with `claude-yolo -r` (or `claude-yolo --resume`).
 
 ## Options
 
 ```
---session NAME    Custom tmux session name (default: yolo-<timestamp>)
---dir PATH        Working directory for agents (default: current directory)
---model MODEL     Claude model to use (e.g., opus, sonnet, haiku)
---poll SECONDS    Approver poll interval (default: 0.3)
---resume          Re-attach to an existing yolo session
--h, --help        Show help
+-s, --session NAME    Custom tmux session name (default: yolo-<timestamp>)
+-d, --dir PATH        Working directory for agents (default: current directory)
+-m, --model MODEL     Claude model to use (e.g., opus, sonnet, haiku)
+-p, --poll SECONDS    Approver poll interval (default: 0.3)
+-f, --file FILE       Read a multiline prompt from a text file
+-r, --resume          Re-attach to an existing yolo session
+-h, --help            Show help
 ```
 
 ## How it works

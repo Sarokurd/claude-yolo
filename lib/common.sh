@@ -36,6 +36,19 @@ check_prereqs() {
     return $missing
 }
 
+# Return a writable directory for audit logs.
+# Prefers /tmp; falls back to ~/.claude-yolo/logs (e.g. Termux where /tmp is not writable).
+log_dir() {
+    if touch /tmp/.claude-yolo-probe 2>/dev/null; then
+        rm -f /tmp/.claude-yolo-probe
+        echo "/tmp"
+    else
+        local d="$HOME/.claude-yolo/logs"
+        mkdir -p "$d" 2>/dev/null || true
+        echo "$d"
+    fi
+}
+
 resolve_script_dir() {
     local src="${BASH_SOURCE[1]:-$0}"
     local dir

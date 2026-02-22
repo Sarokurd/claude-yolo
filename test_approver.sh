@@ -1195,6 +1195,37 @@ assert_contains "log_error: contains ERROR" "$_out" "ERROR"
 # check_prereqs — tmux should be available in test environment
 assert_ok "check_prereqs: passes when tmux is available" check_prereqs
 
+# log_dir — returns a writable directory
+_test_log_dir_returns_path() {
+    local d
+    d="$(log_dir)"
+    [[ -n "$d" ]] && [[ -d "$d" ]]
+}
+assert_ok "log_dir: returns an existing directory" _test_log_dir_returns_path
+
+_test_log_dir_writable() {
+    local d
+    d="$(log_dir)"
+    touch "$d/.claude-yolo-test-probe" 2>/dev/null && rm -f "$d/.claude-yolo-test-probe"
+}
+assert_ok "log_dir: returned directory is writable" _test_log_dir_writable
+
+# log_dir fallback — when /tmp is not writable, uses ~/.claude-yolo/logs
+_test_log_dir_fallback() {
+    local fake_home
+    fake_home="$(mktemp -d)"
+    local result
+    result="$(HOME="$fake_home" bash -c '
+        touch() { return 1; }
+        export -f touch
+        source "'"$SCRIPT_DIR"'/lib/common.sh"
+        log_dir
+    ' 2>/dev/null)"
+    rm -rf "$fake_home"
+    [[ "$result" == *"/.claude-yolo/logs" ]]
+}
+assert_ok "log_dir: falls back to ~/.claude-yolo/logs when /tmp is not writable" _test_log_dir_fallback
+
 ###############################################################################
 #                  LAUNCHER ARGUMENT PARSING                                  #
 ###############################################################################
@@ -1648,26 +1679,18 @@ PROMPT
 
 assert_ok "Per-session audit: daemon uses 3rd arg as log path" _run_integ_audit_log_arg
 
-# Verify default audit log includes session name
+# Verify default audit log includes session name and uses log_dir
 _check_default_audit_path() {
-    # Source the daemon vars in a subshell to check the default path
     local path
-    path="$(SESSION_NAME="claude-yolo-test-123" bash -c '
-        set -euo pipefail
-        SESSION_NAME="claude-yolo-test-123"
-        POLL_INTERVAL=0.3
-        AUDIT_LOG="${3:-/tmp/claude-yolo-${SESSION_NAME}.log}"
-        echo "$AUDIT_LOG"
-    ')"
-    [[ "$path" == "/tmp/claude-yolo-claude-yolo-test-123.log" ]]
+    path="$(source "$SCRIPT_DIR/lib/common.sh"; echo "$(log_dir)/claude-yolo-claude-yolo-test-123.log")"
+    [[ "$path" == *"claude-yolo-claude-yolo-test-123.log" ]]
 }
 
 assert_ok "Per-session audit: default path includes session name" _check_default_audit_path
 
-# Verify launcher generates per-session log path
+# Verify launcher generates per-session log path using log_dir
 _check_launcher_audit_path() {
-    # Extract AUDIT_LOG assignment from the launcher — it should reference SESSION_NAME
-    grep -q 'AUDIT_LOG="/tmp/claude-yolo-${SESSION_NAME}.log"' "$SCRIPT_DIR/claude-yolo"
+    grep -q 'AUDIT_LOG="$(log_dir)/claude-yolo-${SESSION_NAME}.log"' "$SCRIPT_DIR/claude-yolo"
 }
 
 assert_ok "Per-session audit: launcher sets AUDIT_LOG from SESSION_NAME" _check_launcher_audit_path

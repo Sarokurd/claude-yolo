@@ -85,7 +85,7 @@ Re-attach later with `claude-yolo -r` (or `claude-yolo --resume`).
 ## Options
 
 ```
--s, --session NAME    Custom tmux session name (default: yolo-<timestamp>)
+-s, --session NAME    Custom tmux session name (default: claude-yolo-<timestamp>)
 -d, --dir PATH        Working directory for agents (default: current directory)
 -m, --model MODEL     Claude model to use (e.g., opus, sonnet, haiku)
 -p, --poll SECONDS    Approver poll interval (default: 0.3)

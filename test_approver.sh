@@ -1218,9 +1218,20 @@ assert_fail "launcher: -d nonexistent path fails" \
 assert_fail "launcher: -f nonexistent file fails" \
     bash "$SCRIPT_DIR/claude-yolo" -f /nonexistent/file.txt
 
-# No args exits non-zero
-assert_fail "launcher: no arguments fails" \
-    bash "$SCRIPT_DIR/claude-yolo"
+# No args = interactive mode (creates a tmux session, so we need cleanup)
+_test_no_args() {
+    local before
+    before="$(tmux list-sessions -F '#{session_name}' 2>/dev/null | sort || true)"
+    bash "$SCRIPT_DIR/claude-yolo" >/dev/null 2>&1
+    local rc=$?
+    # Kill any new claude-yolo-* sessions created during the test
+    local s
+    for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^claude-yolo-' || true); do
+        echo "$before" | grep -qxF "$s" || tmux kill-session -t "$s" 2>/dev/null || true
+    done
+    return $rc
+}
+assert_ok "launcher: no arguments launches interactive mode" _test_no_args
 
 # Unknown option exits non-zero
 assert_fail "launcher: unknown --flag fails" \
@@ -1244,7 +1255,7 @@ assert_fail "launcher: -f matches --file behavior" \
 
 section "Integration — Daemon with real tmux"
 
-_INTEG_SESSION="yolo-test-$$"
+_INTEG_SESSION="claude-yolo-test-$$"
 _integ_cleanup() {
     tmux kill-session -t "$_INTEG_SESSION" 2>/dev/null || true
     sleep 0.2
@@ -1641,14 +1652,14 @@ assert_ok "Per-session audit: daemon uses 3rd arg as log path" _run_integ_audit_
 _check_default_audit_path() {
     # Source the daemon vars in a subshell to check the default path
     local path
-    path="$(SESSION_NAME="yolo-test-123" bash -c '
+    path="$(SESSION_NAME="claude-yolo-test-123" bash -c '
         set -euo pipefail
-        SESSION_NAME="yolo-test-123"
+        SESSION_NAME="claude-yolo-test-123"
         POLL_INTERVAL=0.3
         AUDIT_LOG="${3:-/tmp/claude-yolo-${SESSION_NAME}.log}"
         echo "$AUDIT_LOG"
     ')"
-    [[ "$path" == "/tmp/claude-yolo-yolo-test-123.log" ]]
+    [[ "$path" == "/tmp/claude-yolo-claude-yolo-test-123.log" ]]
 }
 
 assert_ok "Per-session audit: default path includes session name" _check_default_audit_path
@@ -1665,8 +1676,8 @@ assert_ok "Per-session audit: launcher sets AUDIT_LOG from SESSION_NAME" _check_
 
 section "Integration — Concurrent daemons"
 
-_INTEG_SESSION_A="yolo-test-A-$$"
-_INTEG_SESSION_B="yolo-test-B-$$"
+_INTEG_SESSION_A="claude-yolo-test-A-$$"
+_INTEG_SESSION_B="claude-yolo-test-B-$$"
 
 _concurrent_cleanup() {
     tmux kill-session -t "$_INTEG_SESSION_A" 2>/dev/null || true

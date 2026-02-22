@@ -15,7 +15,7 @@ Usage: claude-yolo [options] ["task one" "task two" ...]
 Launch parallel Claude Code agents in tmux with auto-approval.
 
 Options:
-  -s, --session NAME    Custom tmux session name (default: yolo-<timestamp>)
+  -s, --session NAME    Custom tmux session name (default: claude-yolo-<timestamp>)
   -d, --dir PATH        Working directory for agents (default: current directory)
   -m, --model MODEL     Claude model to use (e.g., opus, sonnet, haiku)
   -p, --poll SECONDS    Approver poll interval (default: 0.3)
@@ -68,7 +68,7 @@ main() {
     # Handle --resume
     if (( resume )); then
         local existing
-        existing="$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^yolo-' | head -1)" || true
+        existing="$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^claude-yolo-' | head -1)" || true
         if [[ -z "$existing" ]]; then
             log_error "No existing yolo session found"
             exit 1
@@ -98,7 +98,7 @@ main() {
     fi
 
     # Set defaults
-    SESSION_NAME="${session_name:-yolo-$(date '+%H%M%S')}"
+    SESSION_NAME="${session_name:-claude-yolo-$(date '+%H%M%S')}"
     AUDIT_LOG="/tmp/claude-yolo-${SESSION_NAME}.log"
     work_dir="${work_dir:-$(pwd)}"
 

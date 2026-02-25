@@ -1439,14 +1439,26 @@ assert_fail "launcher: -f nonexistent file fails" \
     bash "$SCRIPT_DIR/claude-yolo" -f /nonexistent/file.txt
 
 # No args = interactive mode (creates a tmux session, so we need cleanup)
+_NO_ARGS_DEBUG="/tmp/_test_no_args_debug.$$"
 _test_no_args() {
     local before
     before="$(tmux list-sessions -F '#{session_name}' 2>/dev/null | sort || true)"
     # Unset TMUX so the launcher uses "tmux attach" (which harmlessly fails
     # when stdout is redirected) instead of "tmux switch-client" (which would
     # yank the user's current tmux client to the new session).
-    env -u TMUX bash "$SCRIPT_DIR/claude-yolo" >/dev/null 2>&1
+    local output_tmp
+    output_tmp="$(mktemp)"
+    env -u TMUX bash "$SCRIPT_DIR/claude-yolo" >"$output_tmp" 2>&1
     local rc=$?
+    if (( rc != 0 )); then
+        {
+            echo "  [DEBUG _test_no_args] rc=$rc"
+            echo "  [DEBUG _test_no_args] output=$(cat "$output_tmp")"
+            echo "  [DEBUG _test_no_args] sessions=$(tmux list-sessions -F '#{session_name}' 2>&1 || true)"
+            echo "  [DEBUG _test_no_args] TMUX=${TMUX:-unset}"
+        } > "$_NO_ARGS_DEBUG"
+    fi
+    rm -f "$output_tmp"
     # Kill any new claude-yolo-* sessions created during the test
     local s
     for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^claude-yolo-' || true); do
@@ -1455,6 +1467,10 @@ _test_no_args() {
     return $rc
 }
 assert_ok "launcher: no arguments launches interactive mode" _test_no_args
+if [[ -f "$_NO_ARGS_DEBUG" ]]; then
+    cat "$_NO_ARGS_DEBUG"
+    rm -f "$_NO_ARGS_DEBUG"
+fi
 
 # Unknown option exits non-zero
 assert_fail "launcher: unknown --flag fails" \

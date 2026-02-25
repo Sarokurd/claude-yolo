@@ -89,7 +89,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 # Source detect_prompt, detect_collapsed and friends without running the daemon's main_loop.
 # We extract the functions only.
-eval "$(sed -n '/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_collapsed()/,/^}/p' "$SCRIPT_DIR/lib/approver-daemon.sh")"
+eval "$(sed -n '/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^detect_collapsed()/,/^}/p' "$SCRIPT_DIR/lib/approver-daemon.sh")"
 
 # Source build_agent_cmd from the launcher
 eval "$(sed -n '/^build_agent_cmd()/,/^}/p' "$SCRIPT_DIR/claude-yolo")"
@@ -475,6 +475,195 @@ assert_fail "Collapsed FP: Bash( without bullet" \
   Showing detailed transcript · ctrl+o to toggle · ctrl+e to show all
 PANE
 )"
+
+###############################################################################
+#              SLASH COMMAND PICKER DETECTION (detect_slash_picker)            #
+###############################################################################
+
+section "detect_slash_picker — positive detection"
+
+# /p prefix: shows /plan, /permissions, /plugin etc.
+assert_ok "Slash picker: /p prefix autocomplete" \
+    detect_slash_picker "$(cat <<'PANE'
+  Some conversation text above...
+  Claude is working on the task.
+
+  ❯ /permissions    View or update permissions
+    /plan           Enter plan mode
+    /plugin         Manage plugins
+PANE
+)"
+
+# /c prefix: shows /commit, /clear, /config etc.
+assert_ok "Slash picker: /c prefix autocomplete" \
+    detect_slash_picker "$(cat <<'PANE'
+  Previous output here.
+
+    /clear          Clear conversation
+    /commit         Create a git commit
+    /config         View or update config
+PANE
+)"
+
+# Highlighted ❯ selection marker on a different item
+assert_ok "Slash picker: highlighted selection marker" \
+    detect_slash_picker "$(cat <<'PANE'
+  Working on your request...
+
+    /bug            Report a bug
+  ❯ /help           Get help with using Claude Code
+    /init           Initialize project
+PANE
+)"
+
+# Full command list (many items)
+assert_ok "Slash picker: full command list" \
+    detect_slash_picker "$(cat <<'PANE'
+    /bug              Report a bug
+    /clear            Clear conversation
+    /commit           Create a git commit
+    /config           View or update config
+    /help             Get help with using Claude Code
+    /init             Initialize project
+    /permissions      View or update permissions
+    /plan             Enter plan mode
+    /terminal-setup   Setup terminal integration
+PANE
+)"
+
+# Picker visible with stale conversation context above (the real false-positive scenario)
+assert_ok "Slash picker: picker with stale context above" \
+    detect_slash_picker "$(cat <<'PANE'
+  Claude wants to execute Bash
+  ls /tmp
+  Allow              Deny
+  (approved earlier)
+
+  ❯ /permissions    View or update permissions
+    /plan           Enter plan mode
+    /plugin         Manage plugins
+PANE
+)"
+
+section "detect_slash_picker — false positive resistance"
+
+# Normal permission prompt — no slash picker
+assert_fail "Slash picker FP: normal permission prompt" \
+    detect_slash_picker "$(cat <<'PANE'
+  Claude wants to execute Bash
+  ls -la /tmp
+  Allow              Deny
+PANE
+)"
+
+# File paths that start with / but aren't slash commands
+assert_fail "Slash picker FP: file paths with slashes" \
+    detect_slash_picker "$(cat <<'PANE'
+  Reading /home/user/project/src/main.rs
+  Writing /tmp/output.log
+  /var/log/syslog checked
+PANE
+)"
+
+# Single slash command mention in conversation (below threshold of 2)
+assert_fail "Slash picker FP: single slash mention" \
+    detect_slash_picker "$(cat <<'PANE'
+  You can use /help to get more information.
+  Let me know if you need anything else.
+PANE
+)"
+
+# Code output with /path patterns
+assert_fail "Slash picker FP: code with path patterns" \
+    detect_slash_picker "$(cat <<'PANE'
+  import { readFile } from 'fs';
+  const path = '/api/users/list';
+  fetch('/api/data/query');
+PANE
+)"
+
+# Inline discussion mentioning commands without picker format (no 2+ space gap)
+assert_fail "Slash picker FP: inline discussion of commands" \
+    detect_slash_picker "$(cat <<'PANE'
+  Try using /plan to enter plan mode. The /commit command
+  will create a git commit. You can also use /help.
+PANE
+)"
+
+# Empty content
+assert_fail "Slash picker FP: empty content" \
+    detect_slash_picker ""
+
+# Yes/No prompt without picker
+assert_fail "Slash picker FP: Yes/No prompt" \
+    detect_slash_picker "$(cat <<'PANE'
+ Bash command
+   ls /home/user/git/claude_yolo/
+ Do you want to proceed?
+ > 1. Yes
+   2. No
+PANE
+)"
+
+section "detect_slash_picker — combined veto scenarios"
+
+# Slash picker should veto even when stale Allow/Deny is in the window
+_test_picker_vetoes_stale_allow_deny() {
+    local content
+    content="$(cat <<'PANE'
+  Claude wants to execute Bash
+  ls /tmp
+  Allow              Deny
+
+  ❯ /permissions    View or update permissions
+    /plan           Enter plan mode
+    /plugin         Manage plugins
+PANE
+)"
+    # Picker is detected (would veto)
+    detect_slash_picker "$content" || return 1
+    # Prompt is also detected (stale signal)
+    detect_prompt "$content" >/dev/null || true
+    return 0
+}
+assert_ok "Combined: slash picker vetoes stale Allow/Deny" _test_picker_vetoes_stale_allow_deny
+
+# Real prompt without picker should still work
+_test_real_prompt_no_picker() {
+    local content
+    content="$(cat <<'PANE'
+  Claude wants to execute Bash
+  git status
+  Allow              Deny
+PANE
+)"
+    # No picker detected
+    if detect_slash_picker "$content"; then
+        return 1
+    fi
+    # Prompt is detected
+    detect_prompt "$content" >/dev/null
+}
+assert_ok "Combined: real prompt without picker still detected" _test_real_prompt_no_picker
+
+# Slash picker should veto even when stale Yes/No is in the window
+_test_picker_vetoes_stale_yesno() {
+    local content
+    content="$(cat <<'PANE'
+ Bash command
+   ls /tmp
+ Do you want to proceed?
+ > 1. Yes
+   2. No
+
+    /permissions    View or update permissions
+    /plan           Enter plan mode
+PANE
+)"
+    detect_slash_picker "$content" || return 1
+    return 0
+}
+assert_ok "Combined: slash picker vetoes stale Yes/No" _test_picker_vetoes_stale_yesno
 
 ###############################################################################
 #                   ALLOW/DENY STYLE — BASH PERMISSION PROMPTS                #
@@ -1316,7 +1505,7 @@ PROMPT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 2 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^AUDIT_LOG=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^AUDIT_LOG=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1352,7 +1541,7 @@ PROMPT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 2 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1388,7 +1577,7 @@ PROMPT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 2 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1425,7 +1614,7 @@ OUTPUT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 1.5 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1472,7 +1661,7 @@ PROMPT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 2 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1511,7 +1700,7 @@ PROMPT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 2 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1550,7 +1739,7 @@ PROMPT
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 2 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1591,7 +1780,7 @@ _run_integ_collapsed_bash() {
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 3 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_collapsed()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^detect_collapsed()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1624,7 +1813,7 @@ _run_integ_collapsed_webfetch() {
     AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
         timeout 3 bash -c '
             source "'"$SCRIPT_DIR"'/lib/common.sh"
-            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_collapsed()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^detect_collapsed()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
             AUDIT_LOG="'"$audit_tmp"'"
             SESSION_NAME="'"$_INTEG_SESSION"'"
             POLL_INTERVAL=0.2
@@ -1643,6 +1832,53 @@ _run_integ_collapsed_webfetch() {
 
 assert_ok  "Integration Collapsed: Bash detected, ctrl+o sent" _run_integ_collapsed_bash
 assert_ok  "Integration Collapsed: WebFetch detected, ctrl+o sent" _run_integ_collapsed_webfetch
+
+# ── Integration: Slash picker veto ────────────────────────────────────────────
+
+# Stale Allow/Deny context + slash picker visible → daemon must NOT approve.
+_run_integ_slash_picker_veto() {
+    _integ_cleanup
+    local audit_tmp
+    audit_tmp="$(mktemp)"
+
+    tmux new-session -d -s "$_INTEG_SESSION" -n "test" "cat"
+    sleep 0.3
+
+    # Inject stale Allow/Deny from earlier conversation + slash picker at bottom
+    tmux send-keys -t "$_INTEG_SESSION:test" "$(cat <<'PANE'
+  Claude wants to execute Bash
+  ls /tmp
+  Allow              Deny
+
+  ❯ /permissions    View or update permissions
+    /plan           Enter plan mode
+    /plugin         Manage plugins
+PANE
+)" ""
+    sleep 0.2
+
+    AUDIT_LOG="$audit_tmp" SESSION_NAME="$_INTEG_SESSION" POLL_INTERVAL=0.2 COOLDOWN_SECS=2 \
+        timeout 1.5 bash -c '
+            source "'"$SCRIPT_DIR"'/lib/common.sh"
+            eval "$(sed -n '"'"'/^declare -A LAST_APPROVED/p; /^COOLDOWN_SECS=/p; /^audit()/,/^}/p; /^in_cooldown()/,/^}/p; /^detect_prompt()/,/^}/p; /^detect_slash_picker()/,/^}/p; /^main_loop()/,/^}/p'"'"' "'"$SCRIPT_DIR"'/lib/approver-daemon.sh")"
+            AUDIT_LOG="'"$audit_tmp"'"
+            SESSION_NAME="'"$_INTEG_SESSION"'"
+            POLL_INTERVAL=0.2
+            COOLDOWN_SECS=2
+            declare -A LAST_APPROVED
+            main_loop
+        ' 2>/dev/null || true
+
+    local result
+    result="$(cat "$audit_tmp")"
+    rm -f "$audit_tmp"
+    _integ_cleanup
+
+    # Must NOT contain any approvals — the slash picker should veto
+    [[ "$result" != *"APPROVED"* ]]
+}
+
+assert_ok "Integration Slash Picker: veto prevents approval when picker visible" _run_integ_slash_picker_veto
 
 # ── Per-session audit log ────────────────────────────────────────────────────
 

